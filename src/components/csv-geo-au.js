@@ -3,12 +3,14 @@ const regionMapping = require('./regionMapping.json').regionWmsMap;
 const d3 = require('d3-fetch');
 
 function lonColumn(columns) {
-    return columns.find(c => ['lon','longitude', 'lng'].indexOf(c.toLowerCase()) >= 0);
+    return columns.find(
+        c => ['lon', 'longitude', 'lng'].indexOf(c.toLowerCase()) >= 0,
+    );
 }
 function latColumn(columns) {
-    return columns.find(c => ['lat','latitude'].indexOf(c.toLowerCase()) >= 0);
+    return columns.find(c => ['lat', 'latitude'].indexOf(c.toLowerCase()) >= 0);
 }
- 
+
 function addPoints(map, rows, lonColumn, latColumn) {
     map.U.removeSource('points');
     map.U.addGeoJSON('points', {
@@ -19,17 +21,15 @@ function addPoints(map, rows, lonColumn, latColumn) {
                 type: 'Point',
                 coordinates: [row[lonColumn], row[latColumn]],
             },
-            properties: row
-        }))
+            properties: row,
+        })),
     });
     map.U.addCircle('points-circles', 'points', {
-        circleColor: 'blue'
+        circleColor: 'blue',
     });
 }
 
-async function addCsvByUrl(map, url, tableNumericField) {
-    // const convertRow = row => ( row[this.tableNumericField] = +row[this.tableNumericField], row);
-    const rows = await d3.csv(url, /*convertRow */)
+function addCsvByRows(map, rows, tableNumericField, params = {}) {
     const columnNames = Object.keys(rows[0]);
     console.log(lonColumn(columnNames), latColumn(columnNames));
     if (lonColumn(columnNames) && latColumn(columnNames)) {
@@ -41,18 +41,19 @@ async function addCsvByUrl(map, url, tableNumericField) {
     const regionTypeAliases = {};
     for (let rid of Object.keys(regionMapping)) {
         regionTypeAliases[rid.toLowerCase()] = rid;
-        for (let alias of regionMapping[rid].aliases.map(a => a.toLowerCase())) {
+        for (let alias of regionMapping[rid].aliases.map(a =>
+            a.toLowerCase(),
+        )) {
             regionTypeAliases[alias] = regionTypeAliases[alias] || rid;
         }
     }
-    console.log({regionTypeAliases});
+    console.log({ regionTypeAliases });
 
     let regionTypeId;
-    let tableIdField = columnNames
-        .find(col => regionTypeId = regionTypeAliases[col.toLowerCase()]);
+    let tableIdField = columnNames.find(
+        col => (regionTypeId = regionTypeAliases[col.toLowerCase()]),
+    );
 
-    
-    
     if (!tableNumericField) {
         tableNumericField = columnNames.find(c => {
             if (regionTypeAliases[c.toLowerCase()]) {
@@ -62,40 +63,50 @@ async function addCsvByUrl(map, url, tableNumericField) {
                 return false;
             }
             return true;
-        })
-        
+        });
+
         if (!tableNumericField) {
-            throw 'error',`Couldn't find a numeric field out of ${columnNames}. Exiting.`;
+            throw ('error',
+            `Couldn't find a numeric field out of ${columnNames}. Exiting.`);
             return;
             // tableNumericField = columnNames.find(c => !regionTypeAliases[c.toLowerCase()])
         }
     }
 
     if (!regionTypeId) {
-        console.log(`Couldn't find region type for ${columnNames}.`);
+        throw `Couldn't find region type for ${columnNames}.`;
         return;
     } else {
-        console.log(`Matched region type ${regionTypeId}. Numeric field: ${tableNumericField}`);
+        console.log(
+            `Matched region type ${regionTypeId}. Numeric field: ${tableNumericField}`,
+        );
     }
-    
+
     const regionType = regionMapping[regionTypeId];
 
-
-
-
-    window.choro = new Choropleth({ 
-        tableUrl: url,
+    window.choro = new Choropleth({
+        tableRows: params.tableUrl ? undefined : rows,
         tableNumericField,
         tableIdField, // TODO support aliases 'CED_CODE18',
         geometryTiles: [regionType.server],
         geometryIdField: regionType.regionProp, //'CED_CODE18',
         // useFeatureId: true,
         // useFeatureState: true,
-        sourceLayer: regionType.layerName,//'CED_2018',
+        sourceLayer: regionType.layerName, //'CED_2018',
         binCount: 11,
         legendElement: document.querySelectorAll('#legend')[0],
-        debug: true
+        debug: true,
+        ...params,
     }).addTo(map);
 }
 
-export { addCsvByUrl }
+async function addCsvByUrl(map, url, tableNumericField, params = {}) {
+    // const convertRow = row => ( row[this.tableNumericField] = +row[this.tableNumericField], row);
+    const rows = await d3.csv(url /*convertRow */);
+    return addCsvByRows(map, rows, tableNumericField, {
+        tableUrl: url,
+        ...params,
+    });
+}
+
+export { addCsvByUrl, addCsvByRows };
